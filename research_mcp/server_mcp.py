@@ -283,21 +283,8 @@ async def web_search(
 # ANALYST RATINGS SEARCH
 # ============================================================================
 
-@research_server.tool(
-    name="search_analyst_ratings",
-    description="""
-    Search specifically for analyst ratings, price targets, and recommendations for a stock.
-    
-    Args:
-        symbol: str - Stock ticker symbol (e.g., "AAPL", "TSLA")
-        company_name: str - Optional company name for better search results
-        days_back: int - How many days back to search (default: 30)
-    
-    Returns:
-        dict - Analyst ratings search results from multiple financial sources
-    """
-)
-async def search_analyst_ratings(
+# Define the actual implementation function first (without decorator)
+async def _search_analyst_ratings_impl(
     symbol: str,
     company_name: Optional[str] = None,
     days_back: int = 30
@@ -383,25 +370,36 @@ async def search_analyst_ratings(
             "success": False
         }
 
+# Now wrap it with the decorator for FastMCP
+@research_server.tool(
+    name="search_analyst_ratings",
+    description="""
+    Search specifically for analyst ratings, price targets, and recommendations for a stock.
+    
+    Args:
+        symbol: str - Stock ticker symbol (e.g., "AAPL", "TSLA")
+        company_name: str - Optional company name for better search results
+        days_back: int - How many days back to search (default: 30)
+    
+    Returns:
+        dict - Analyst ratings search results from multiple financial sources
+    """
+)
+async def search_analyst_ratings(
+    symbol: str,
+    company_name: Optional[str] = None,
+    days_back: int = 30
+) -> Dict[str, Any]:
+    """Search for analyst ratings for a specific stock."""
+    return await _search_analyst_ratings_impl(symbol, company_name, days_back)
+
 
 # ============================================================================
 # RATINGS AGGREGATOR
 # ============================================================================
 
-@research_server.tool(
-    name="aggregate_ratings",
-    description="""
-    Aggregate and normalize analyst ratings from search results into a structured format.
-    
-    Args:
-        symbol: str - Stock ticker symbol
-        search_results: list - List of search results containing rating information
-    
-    Returns:
-        dict - Aggregated ratings with consensus, average target price, and individual ratings
-    """
-)
-async def aggregate_ratings(
+# Implementation function (without decorator)
+async def _aggregate_ratings_impl(
     symbol: str,
     search_results: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
@@ -409,7 +407,7 @@ async def aggregate_ratings(
     try:
         # If no search results provided, fetch them
         if not search_results:
-            search_data = await search_analyst_ratings(symbol)
+            search_data = await _search_analyst_ratings_impl(symbol)
             if not search_data.get("success"):
                 return search_data
             search_results = search_data.get("results", [])
@@ -545,25 +543,34 @@ Only include ratings you can clearly identify from the content. Do not make up d
             "success": False
         }
 
+# Wrap with decorator
+@research_server.tool(
+    name="aggregate_ratings",
+    description="""
+    Aggregate and normalize analyst ratings from search results into a structured format.
+    
+    Args:
+        symbol: str - Stock ticker symbol
+        search_results: list - List of search results containing rating information
+    
+    Returns:
+        dict - Aggregated ratings with consensus, average target price, and individual ratings
+    """
+)
+async def aggregate_ratings(
+    symbol: str,
+    search_results: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """Aggregate analyst ratings from search results."""
+    return await _aggregate_ratings_impl(symbol, search_results)
+
 
 # ============================================================================
 # SENTIMENT ANALYSIS
 # ============================================================================
 
-@research_server.tool(
-    name="analyze_sentiment",
-    description="""
-    Analyze sentiment of text content related to a stock.
-    
-    Args:
-        text: str - Text content to analyze
-        symbol: str - Optional stock symbol for context
-    
-    Returns:
-        dict - Sentiment analysis with polarity, subjectivity, and classification
-    """
-)
-async def analyze_sentiment(
+# Implementation function
+async def _analyze_sentiment_impl(
     text: str,
     symbol: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -606,27 +613,34 @@ async def analyze_sentiment(
             "success": False
         }
 
+# Wrap with decorator
+@research_server.tool(
+    name="analyze_sentiment",
+    description="""
+    Analyze sentiment of text content related to a stock.
+    
+    Args:
+        text: str - Text content to analyze
+        symbol: str - Optional stock symbol for context
+    
+    Returns:
+        dict - Sentiment analysis with polarity, subjectivity, and classification
+    """
+)
+async def analyze_sentiment(
+    text: str,
+    symbol: Optional[str] = None
+) -> Dict[str, Any]:
+    """Analyze sentiment of text content."""
+    return await _analyze_sentiment_impl(text, symbol)
+
 
 # ============================================================================
 # SUMMARIZER
 # ============================================================================
 
-@research_server.tool(
-    name="summarize_content",
-    description="""
-    Summarize long articles or content about a stock.
-    
-    Args:
-        content: str - The content to summarize
-        symbol: str - Stock symbol for context
-        max_length: int - Maximum summary length in words (default: 200)
-        focus: str - Focus area: "ratings", "news", "analysis", or "general"
-    
-    Returns:
-        dict - Summarized content with key points
-    """
-)
-async def summarize_content(
+# Implementation function
+async def _summarize_content_impl(
     content: str,
     symbol: str,
     max_length: int = 200,
@@ -690,28 +704,38 @@ Respond with a JSON object:
             "success": False
         }
 
+# Wrap with decorator
+@research_server.tool(
+    name="summarize_content",
+    description="""
+    Summarize long articles or content about a stock.
+    
+    Args:
+        content: str - The content to summarize
+        symbol: str - Stock symbol for context
+        max_length: int - Maximum summary length in words (default: 200)
+        focus: str - Focus area: "ratings", "news", "analysis", or "general"
+    
+    Returns:
+        dict - Summarized content with key points
+    """
+)
+async def summarize_content(
+    content: str,
+    symbol: str,
+    max_length: int = 200,
+    focus: str = "general"
+) -> Dict[str, Any]:
+    """Summarize content about a stock."""
+    return await _summarize_content_impl(content, symbol, max_length, focus)
+
 
 # ============================================================================
 # SCENARIO GENERATOR
 # ============================================================================
 
-@research_server.tool(
-    name="generate_scenarios",
-    description="""
-    Generate detailed bull and bear scenarios for a stock based on research data.
-    
-    Args:
-        symbol: str - Stock ticker symbol
-        company_name: str - Company name for context
-        ratings_data: dict - Optional aggregated ratings data
-        news_summary: str - Optional summary of recent news
-        current_price: float - Optional current stock price
-    
-    Returns:
-        dict - Bull and bear scenarios with catalysts, risks, probabilities, and price targets
-    """
-)
-async def generate_scenarios(
+# Implementation function
+async def _generate_scenarios_impl(
     symbol: str,
     company_name: Optional[str] = None,
     ratings_data: Optional[Dict[str, Any]] = None,
@@ -826,6 +850,33 @@ Be specific, data-driven, and balanced in your analysis. Probabilities should su
             "success": False
         }
 
+# Wrap with decorator
+@research_server.tool(
+    name="generate_scenarios",
+    description="""
+    Generate detailed bull and bear scenarios for a stock based on research data.
+    
+    Args:
+        symbol: str - Stock ticker symbol
+        company_name: str - Company name for context
+        ratings_data: dict - Optional aggregated ratings data
+        news_summary: str - Optional summary of recent news
+        current_price: float - Optional current stock price
+    
+    Returns:
+        dict - Bull and bear scenarios with catalysts, risks, probabilities, and price targets
+    """
+)
+async def generate_scenarios(
+    symbol: str,
+    company_name: Optional[str] = None,
+    ratings_data: Optional[Dict[str, Any]] = None,
+    news_summary: Optional[str] = None,
+    current_price: Optional[float] = None
+) -> Dict[str, Any]:
+    """Generate bull and bear scenarios for a stock."""
+    return await _generate_scenarios_impl(symbol, company_name, ratings_data, news_summary, current_price)
+
 
 # ============================================================================
 # CACHE MANAGEMENT
@@ -920,7 +971,7 @@ async def comprehensive_research(
         
         # Step 1: Search for analyst ratings
         print(f"🔍 Searching for analyst ratings for {symbol}...")
-        ratings_search = await search_analyst_ratings(symbol, company_name)
+        ratings_search = await _search_analyst_ratings_impl(symbol, company_name)
         results["ratings_search"] = {
             "success": ratings_search.get("success"),
             "results_count": ratings_search.get("results_count", 0)
@@ -929,7 +980,7 @@ async def comprehensive_research(
         # Step 2: Aggregate ratings
         print(f"📊 Aggregating ratings for {symbol}...")
         if ratings_search.get("success") and ratings_search.get("results"):
-            aggregated = await aggregate_ratings(symbol, ratings_search.get("results"))
+            aggregated = await _aggregate_ratings_impl(symbol, ratings_search.get("results"))
             results["aggregated_ratings"] = aggregated
         else:
             results["aggregated_ratings"] = {"success": False, "error": "No ratings found to aggregate"}
@@ -939,7 +990,7 @@ async def comprehensive_research(
         if ratings_search.get("results"):
             combined_text = " ".join([r.get("content", "") for r in ratings_search.get("results", [])[:5]])
             if combined_text:
-                sentiment = await analyze_sentiment(combined_text, symbol)
+                sentiment = await _analyze_sentiment_impl(combined_text, symbol)
                 results["sentiment"] = sentiment
         
         # Step 4: Generate summary
@@ -947,14 +998,14 @@ async def comprehensive_research(
         if ratings_search.get("results"):
             combined_content = "\n\n".join([r.get("content", "") for r in ratings_search.get("results", [])[:5]])
             if combined_content:
-                summary = await summarize_content(combined_content, symbol, focus="ratings")
+                summary = await _summarize_content_impl(combined_content, symbol, focus="ratings")
                 results["summary"] = summary
         
         # Step 5: Generate scenarios
         if include_scenarios:
             print(f"🎯 Generating bull/bear scenarios for {symbol}...")
             news_summary = results.get("summary", {}).get("summary", "")
-            scenarios = await generate_scenarios(
+            scenarios = await _generate_scenarios_impl(
                 symbol=symbol,
                 company_name=company_name,
                 ratings_data=results.get("aggregated_ratings"),
