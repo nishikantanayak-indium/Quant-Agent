@@ -19,6 +19,7 @@ import base64
 from google import genai
 from google.genai import types
 import datetime
+from cloud_storage import upload_chart_to_cloudinary
 
 # Initialize FastMCP server
 technicalanalysis_server = FastMCP(
@@ -59,20 +60,49 @@ async def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> pd.Da
         raise RuntimeError(f"Failed to fetch data for {ticker}: {e}\n\nTraceback:\n{traceback.format_exc()}")
                 
             
-async def save_figure_as_base64(fig: go.Figure, filename: str, width: int = 1000, height: int = 600) -> dict:
+async def save_figure_as_base64(fig: go.Figure, filename: str, width: int = 1000, height: int = 600, use_cloudinary: bool = True) -> dict:
     """
-    Save figure to file and return path only (NOT the base64 data to avoid huge responses).
-    The base64 is stored separately but not returned to avoid overwhelming the LLM.
+    Save figure to Cloudinary and return the cloud URL.
+    Falls back to local storage if Cloudinary upload fails.
+    
+    Args:
+        fig: Plotly figure object
+        filename: Chart filename
+        width: Chart width
+        height: Chart height
+        use_cloudinary: Whether to upload to Cloudinary (default True)
+    
+    Returns:
+        Dict with 'filename' (URL if cloud upload successful, or local path) and 'success' status
     """
     try:
+        if use_cloudinary:
+            result = await upload_chart_to_cloudinary(fig, filename, width, height)
+            
+            if result.get("success"):
+                return {
+                    "filename": result["cloud_url"],
+                    "success": True,
+                    "source": "cloudinary"
+                }
+            else:
+                print(f"Cloudinary upload failed: {result.get('error')}. Falling back to local storage.")
+        
+        # Fallback to local storage
         loop = asyncio.get_event_loop()    
         await loop.run_in_executor(None, lambda: fig.write_image(filename, width=width, height=height))
         full_path = os.path.abspath(filename)
-        # Note: We intentionally do NOT return the base64 encoded image to avoid
-        # overwhelming the LLM with huge data. The file path is sufficient.
-        return {"filename": full_path, "success": True}
+        
+        return {
+            "filename": full_path,
+            "success": True,
+            "source": "local"
+        }
     except Exception as e:
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
             
 
@@ -328,24 +358,31 @@ async def get_stock_macd(ticker: str, start_date: str, end_date: str) -> dict:
         macd = MACD(close=close)
         df['MACD'] = macd.macd()
         df['MACD_signal'] = macd.macd_signal()
+        df['MACD_hist'] = macd.macd_diff()
         
         
         df.index = df.index.strftime('%Y-%m-%d')
-        fig = make_subplots(rows=3, cols=1, shared_xaxes=True)
+        fig = go.Figure()
+        
+        fig.add_trace(go.Bar(
+        x=df.index, y=df['MACD_hist'], name='MACD Histogram',
+        marker_color='gray', opacity=0.3))
+        
         fig.add_trace(go.Scatter(
         x=df.index, y=df['MACD'], name='MACD',
-        line=dict(color='orange')), row=3, col=1)
+        line=dict(color='orange', width=2)))
+        
         fig.add_trace(go.Scatter(
-        x=df.index, y=df['MACD_signal'], name='MACD_signal',
-        line=dict(color='blue')), row=3, col=1)
+        x=df.index, y=df['MACD_signal'], name='Signal',
+        line=dict(color='blue', width=2)))
         
         fig.update_layout(
         title=f"{ticker.upper()} - MACD Analysis",
         template='plotly_dark',
         xaxis_title='Date',
         yaxis_title='MACD',
-        height=900,
-        width=1400
+        height=600,
+        width=1000
         )
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -393,18 +430,22 @@ async def get_stock_volume(ticker: str, start_date: str, end_date: str) -> dict:
         
         
         df.index = df.index.strftime('%Y-%m-%d')
-        fig = make_subplots(rows=3, cols=1, shared_xaxes=True)
+        fig = go.Figure()
         fig.add_trace(go.Bar(
         x=df.index, y=df['Volume'], name='Volume',
-        marker_color='orange', opacity=0.4), row=4, col=1)
+        marker_color='orange', opacity=0.6))
+        
+        fig.add_trace(go.Scatter(
+        x=df.index, y=df['Volume_SMA_20'], name='20-day SMA',
+        line=dict(color='yellow', width=2)))
         
         fig.update_layout(
               title=f"{ticker.upper()} - Volume Trend (with 20-day SMA)",
              template='plotly_dark',
              xaxis_title='Date',
              yaxis_title='Volume',
-             height=900,
-             width=1400
+             height=600,
+             width=1000
          )
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -464,13 +505,13 @@ async def get_stock_support_resistance(ticker: str, start_date: str, end_date: s
         name='Resistance', marker=dict(color='red', size=6, symbol='triangle-up')))
 
         fig.update_layout(
-        title=f'{ticker} Technical Analysis )',
-        height=1000,
+        title=f'{ticker.upper()} - Support & Resistance Levels',
+        height=600,
         template='plotly_dark',
         xaxis_title='Date',
-        yaxis_title='Price'
-        
-)
+        yaxis_title='Price',
+        width=1000
+        )
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{ticker}_support_resistance_{timestamp}.png"

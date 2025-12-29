@@ -96,11 +96,21 @@ async def initialize_agents():
         # Initialize memory saver
         print("💾 Initializing SQLite memory...")
         db_path = os.getenv("SQLITE_DB_PATH", "sqlite:///checkpoints.db")
+        print(f"📍 Using database path: {db_path}")
         
-        saver_cm = AsyncSqliteSaver.from_conn_string(db_path)
-        saver = await saver_cm.__aenter__()
-        await saver.setup()  # Creates tables if needed
-        print("✅ Memory initialized successfully")
+        try:
+            saver_cm = AsyncSqliteSaver.from_conn_string(db_path)
+            print("🔗 Created AsyncSqliteSaver context manager")
+            saver = await saver_cm.__aenter__()
+            print("✅ Entered saver context manager")
+            await saver.setup()  # Creates tables if needed
+            print("✅ Memory initialized successfully")
+        except Exception as saver_error:
+            print(f"❌ Failed to initialize saver: {str(saver_error)}")
+            print(f"❌ Database path: {db_path}")
+            import traceback
+            traceback.print_exc()
+            raise
 
         # Wait for MCP servers to be ready
         print("⏳ Waiting for MCP servers...")
